@@ -34,11 +34,49 @@ void showPrompt() {
 char *builtin_commands[] = {"cd", "help", "quit"};
 int (*builtin_funcs[])(char **) = {&cmd_cd, &cmd_help, &cmd_quit};
 
-//
+// Çocuk süreç sinyalini işler
+void sig_child(int signo) {
+    int status;
+    pid_t pid;
+    //eğer ki proses bittiyse dokümanda istenilen çıktıyı ver
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        if (WIFEXITED(status)) {
+            int child_val = WEXITSTATUS(status);
+            printf("[%d] retval: %d\n>", pid, child_val);
+        }
+    }
+}
+// Komutu arkaplanda çalıştırır
+int execute_in_background(char **args) {
+    pid_t pid;
+    //arkaplanda çalışacak prosesi takip edebilmek için bir sinyal handler tanımla
+    struct sigaction sa;
+    sa.sa_handler = sig_child;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_NOCLDSTOP | SA_RESTART;
 
+    if (sigaction(SIGCHLD, &sa, NULL) < 0) {
+        fprintf(stderr, "sigaction failed\n");
+        return 1;
+    }
+    //prosesi fokla ve çalıştır ama 
+    //önplanda çalışan prosesler aksine ebeveyn proseste bitmesini bekleme
+    pid = fork();
+    if (pid == 0) {
+        if (execvp(args[0], args) == -1) {
+            printf("Komut bulunamadi");
+            kill(getpid(), SIGTERM);
+        }
+    } else if (pid < 0) {
+        perror("fork failed");
+        return 1;
+    } else {
+        // Parent process
+        printf("Process running in background with PID: %d\n", pid);
+    }
 
-//
-
+    return 0;
+}
 // Shell döngüsünü başlatır
 void shell_loop() {
     char *line = NULL;
