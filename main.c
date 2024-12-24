@@ -34,6 +34,41 @@ void showPrompt() {
 char *builtin_commands[] = {"cd", "help", "quit"};
 int (*builtin_funcs[])(char **) = {&cmd_cd, &cmd_help, &cmd_quit};
 
+// Built-in komutların sayısını döner
+int num_builtins() {
+    return sizeof(builtin_commands) / sizeof(char *);
+}
+// 'cd' komutunu işler, dosya dizinini değiştirir
+int cmd_cd(char **args) {
+    if (args[1] == NULL) {
+        fprintf(stderr, "myshell: 'cd' komutu bir dizin belirtmeli\n");
+    } else {
+        if (chdir(args[1]) != 0) {
+            perror("myshell");
+        }
+    }
+    return 1;
+}
+// 'help' komutunu işler, desteklenen komutları listeler
+int cmd_help(char **args) {
+    printf("myshell: Desteklenen komutlar:\n");
+    for (int i = 0; i < num_builtins(); i++) {
+        printf("  %s\n", builtin_commands[i]);
+    }
+    printf("Ayrıca, sistem komutları ve I/O yönlendirme desteklenir.\n");
+    return 1;
+}
+// 'quit' komutunu işler, kabuktan çıkar, çıkmadan önce arkaplan proseslerinin bitmesini bekler
+int cmd_quit(char **args) {
+    for (int i = 0; i < bg_count; i++) {
+        int status;
+        waitpid(background_processes[i], &status, 0);
+        printf("[%d] retval: %d\n", background_processes[i], WEXITSTATUS(status));
+    }
+    while (wait(NULL) > 0); // Wait for all remaining child processes
+    printf("Kabuktan çıkış yapılıyor...\n");
+    exit(0);
+}
 // Çocuk süreç sinyalini işler
 void sig_child(int signo) {
     int status;
