@@ -112,6 +112,103 @@ int execute_in_background(char **args) {
 
     return 0;
 }
+// Komutu çalıştırır, arkaplanda olup olmadığını kontrol eder
+int execute_command(char **args, bool isBackground) {
+    //prosesleri arkaplanda çalışacaklar ve arkaplanda çalışmayacaklar olarak ikiye ayır
+    if(!isBackground){
+        //built-in komutları kontrol et
+        for (int i = 0; i < num_builtins(); i++) {
+            if (strcmp(args[0], builtin_commands[i]) == 0) {
+                return (*builtin_funcs[i])(args);
+            }
+        }
+        //built-in komut değilse, fork yaparak yeni bir proses oluştur
+        //çocuk prosesi çalıştır ve ebeveynde onun bitmesini bekle
+        pid_t pid = fork();
+        if (pid == 0) {
+            handle_redirection(args);
+            if(execvp(args[0], args) == -1){
+                perror("myshell");
+                exit(EXIT_FAILURE);
+            }
+        } else if (pid < 0) {
+            perror("myshell");
+        } else {
+            waitpid(pid,NULL,0);
+        }
+    }else{
+        //prosesi arkaplanda çalıştıracak fonksiyonu çağır
+        execute_in_background(args);
+    }
+    return 1;
+}
+// Komutları boşluk karakterine göre ayrıştırır
+char** space_parse(char* commands){
+    int buf_size = TOK_BUFSIZE;
+    int position = 0;
+    char** args = malloc(sizeof(char*) * buf_size);
+    char delimiter[] = DELIMITERS;
+
+    if (!args) {
+        perror("allocation error\n");
+        exit(EXIT_FAILURE);
+    }
+
+    char* token = strtok(commands,delimiter);
+    // commandleri boşluklarına göre ayrıştırarak argumanlar dizisini oluştur
+    while (token != NULL) {
+        args[position] = token;
+        position++;
+        //eğer ki dizinin alanını aştıysa daha fazla alan allocate et
+        if(position >= buf_size){
+            buf_size += TOK_BUFSIZE;
+            args = realloc(args, buf_size*sizeof(char*));
+            if(!args){
+                perror("allocation error\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+        token = strtok(NULL,delimiter);
+    }
+    
+    args[position] = NULL;
+    return args;
+}
+// Komutları noktalı virgüle göre ayrıştırır
+char** semicolon_parse(char* line, int* cmd_count){
+  int buf_size = TOK_BUFSIZE;
+    int position = 0;
+    char** commands = malloc(sizeof(char*) * buf_size);
+    char delimiter[] = ";";
+
+    if (!commands) {
+        perror("allocation error\n");
+        exit(EXIT_FAILURE);
+    }
+
+    char* token = strtok(line,delimiter);
+    //satırları noktalı virgüllere göre ayrıştırarak commandlere böl
+    while (token != NULL) {
+        commands[position] = token;
+        position++;
+        *cmd_count = *cmd_count + 1;
+        //dizinin boyutu aşıldıysa daha fazla alan allocate et
+        if(position >= buf_size){
+            buf_size += TOK_BUFSIZE;
+            commands = realloc(commands, buf_size*sizeof(char*));
+            if(!commands){
+                perror("allocation error\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+        token = strtok(NULL,delimiter);
+    }
+    
+    commands[position] = NULL;
+    //*cmd_count = *cmd_count - 1;
+
+    return commands;
+}
 // Shell döngüsünü başlatır
 void shell_loop() {
     char *line = NULL;
