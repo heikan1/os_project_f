@@ -69,6 +69,33 @@ int cmd_quit(char **args) {
     printf("Kabuktan çıkış yapılıyor...\n");
     exit(0);
 }
+
+// I/O yönlendirmesini işler
+void handle_redirection(char **args) {
+    //tüm argları dolaş, < ve > varsa dosya aç, dosyayı stdin veya stdout a yönlendir
+    for (int i = 0; args[i] != NULL; i++) {
+        if (strcmp(args[i], "<") == 0) {
+            int fd = open(args[i + 1], O_RDONLY);
+            if (fd < 0) {
+                perror("Giriş dosyası açılamadı");
+                exit(EXIT_FAILURE);
+            }
+            dup2(fd, STDIN_FILENO);
+            close(fd);
+            args[i] = NULL;
+        } else if (strcmp(args[i], ">") == 0) {
+            int fd = open(args[i + 1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (fd < 0) {
+                perror("Çıkış dosyası açılamadı");
+                exit(EXIT_FAILURE);
+            }
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
+            args[i] = NULL;
+        }
+    }
+}
+
 // Çocuk süreç sinyalini işler
 void sig_child(int signo) {
     int status;
